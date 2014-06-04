@@ -158,14 +158,12 @@ sp_fileclose(spfile *f)
 static inline int
 sp_filecomplete(spfile *f)
 {
-	if (f->creat == 0)
-		return 0;
-	/* remove .incomplete part */
 	f->creat = 0;
 	char path[1024];
 	snprintf(path, sizeof(path), "%s", f->file);
-	char *ext = strrchr(path, '.');
-	assert(ext != NULL);
+	char *ext = strstr(path, ".incomplete");
+	if (spunlikely(ext == NULL))
+		return 0;
 	*ext = 0;
 	int rc = rename(f->file, path);
 	if (spunlikely(rc == -1))
@@ -212,14 +210,15 @@ int sp_mapcomplete(spfile *f)
 
 int sp_mapensure(spfile *f, uint64_t size, float grow)
 {
-	if (splikely((f->used + size) < f->size))
+	if (splikely((f->used + size) <= f->size))
 		return 0;
 	int rc = sp_unmap(f);
 	if (spunlikely(rc == -1))
 		return -1;
-	long double nsz = f->size * grow;
+	uint64_t nsz = f->used + f->size * grow;
 	if (spunlikely(nsz < size))
-		nsz = size;
+		nsz = f->used + size;
+	assert(nsz >= (f->used + size));
 	rc = sp_mapresize(f, nsz);
 	if (spunlikely(rc == -1))
 		return -1;
